@@ -7,7 +7,7 @@ const httpServer = app.listen(8080, () => {
 })
 
 const wss = new WebSocketServer({ server: httpServer });
-
+//TODO: BUG: Probably,during race conditions, 2 browsers get the same userid,hence causing some bugs,,,or maybe there's issue with allotting the same websocket session to all users
 interface User {
   id: number
   ws: WebSocket
