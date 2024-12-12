@@ -2,6 +2,7 @@ import express from 'express'
 import { WebSocketServer } from 'ws'
 import { User } from './types/Usertypes'
 import { broadcastChatMessage, broadcastUserList, broadcastUserMove } from './helperfns/Sockets'
+import { CreateNewUser } from './helperfns/UserRelated/CreateNewUser'
 
 const app = express()
 const httpServer = app.listen(8080, () => {
@@ -14,18 +15,8 @@ const wss = new WebSocketServer({ server: httpServer });
 let connectedUsers: Map<number, User> = new Map();
 
 wss.on('connection', function connection(ws) {
-  const userId = connectedUsers.size;
 
-  const newUser: User = {
-    id: userId,
-    ws: ws,
-    position: {
-      x: 0,
-      y: 0
-    }
-  };
-
-  connectedUsers.set(userId, newUser);
+  const userId = CreateNewUser(connectedUsers,ws)
 
   ws.send(JSON.stringify({ 
     type: 'userId', 
@@ -61,43 +52,3 @@ wss.on('connection', function connection(ws) {
     broadcastUserList(connectedUsers,wss);
   });
 });
-
-// function broadcastUserList() {
-//   const userList = Array.from(connectedUsers.values()).map(user => ({
-//     id: user.id,
-//     position: user.position
-//   }));
-
-//   wss.clients.forEach(client => {
-//     if (client.readyState === WebSocket.OPEN) {
-//       client.send(JSON.stringify({
-//         type: 'userList',
-//         users: userList
-//       }));
-//     }
-//   });
-// }
-
-// function broadcastUserMove(userId: number, position: { x: number, y: number }) {
-//   wss.clients.forEach(client => {
-//     if (client.readyState === WebSocket.OPEN) {
-//       client.send(JSON.stringify({
-//         type: 'userMove',
-//         userId: userId,
-//         position: position
-//       }));
-//     }
-//   });
-// }
-// //
-// function broadcastChatMessage(userId: number, message: string) {
-//   wss.clients.forEach(client => {
-//     if (client.readyState === WebSocket.OPEN) {
-//       client.send(JSON.stringify({
-//         type: 'chat',
-//         userId: userId,
-//         message: message
-//       }));
-//     }
-//   });
-// }
