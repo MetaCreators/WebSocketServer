@@ -39,6 +39,7 @@ wss.on('connection', function connection(ws) {
           //proximity check here
           //TODO: We are calculating proximity at every move => results in too many computations => what's a better way to do it ?
           //TODO: Will this approach result in a lag? =>probably yes
+          //TODO: BUG: When >2 users => proximity message stops working properly=>doesnt clear away + doesnt showup on some client
           let nearbyUsers = checkProximity(connectedUsers)
           if (nearbyUsers) {
             Object.entries(nearbyUsers).forEach(([userId, nearbyUserIds]) => {
