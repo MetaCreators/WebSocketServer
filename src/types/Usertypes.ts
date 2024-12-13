@@ -7,3 +7,8 @@ export interface User {
     y: number
   }
 }
+
+export interface CurrUserPosType {
+  x: number;
+  y: number;
+}
