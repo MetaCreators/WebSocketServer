@@ -11,7 +11,6 @@ const httpServer = app.listen(8080, () => {
 })
 
 const wss = new WebSocketServer({ server: httpServer });
-//TODO: BUG: Probably,during race conditions, 2 browsers get the same userid,hence causing some bugs,,,or maybe there's issue with allotting the same websocket session to all users
 
 let connectedUsers: Map<number, User> = new Map();
 
@@ -39,7 +38,7 @@ wss.on('connection', function connection(ws) {
           }
           //proximity check here
           //TODO: We are calculating proximity at every move => results in too many computations => what's a better way to do it ?
-          //TODO: Will this approach result in a lag ?
+          //TODO: Will this approach result in a lag? =>probably yes
           let nearbyUsers = checkProximity(connectedUsers)
           if (nearbyUsers) {
             Object.entries(nearbyUsers).forEach(([userId, nearbyUserIds]) => {
@@ -56,6 +55,18 @@ wss.on('connection', function connection(ws) {
                })
               }
             });
+          } else {
+            connectedUsers.forEach((user, userId) => {
+              wss.clients.forEach((client) => {
+                  if (client===user.ws && client.readyState === WebSocket.OPEN) {
+                    client.send(JSON.stringify({
+                      type: "proximity",
+                      nearbyUsers: null,
+                      currentUserId:userId
+                   }))
+                 }
+              })
+            }) 
           }
           break;
         
