@@ -10,7 +10,7 @@ const httpServer = app.listen(8080, () => {
     console.log("websocket server started on port 8080")
 })
 
-const wss = new WebSocketServer({ server: httpServer });
+const wss = new WebSocketServer({ server: httpServer,path:'/chat' });
 
 let connectedUsers: Map<number, User> = new Map();
 
