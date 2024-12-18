@@ -51,6 +51,7 @@ const io = new Server(httpsServer, {
 
 io.on('connection', (socket) => {
   console.log("user connected with id " + socket.id);
+  socket.broadcast.emit("new-user","new user joined with id "+socket.id)
   socket.on('connect_error', (error) => {
     console.log('Connection error:', error);
   });
