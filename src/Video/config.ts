@@ -1,3 +1,5 @@
+import { WorkerLogLevel } from "mediasoup/node/lib/types";
+
 export const config = {
   listenIp: '0.0.0.0',
   listenPort: 8080,
@@ -7,7 +9,7 @@ export const config = {
     worker: {
       rtcMinPort: 10000,
       rtcMaxPort: 10100,
-      logLevel: 'warn',
+      logLevel: 'warn'as WorkerLogLevel,
     },
     router: {
       mediaCodecs: [
