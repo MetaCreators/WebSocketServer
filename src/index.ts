@@ -51,7 +51,11 @@ const io = new Server(httpsServer, {
 
 
 let worker:any;
-let router:any;
+let router: any;
+let producerTransport: any;
+let consumerTransport: any;
+let producer: any;
+let consumer: any;
 
 
 async function createWorker() {
@@ -110,7 +114,90 @@ io.on('connection', async (socket) => {
     const rtpCapabilities = router.rtpCapabilities;
     console.log('rtpCapabilities: ', rtpCapabilities);
     callback({ rtpCapabilities });
+  });
+
+  socket.on('createWebRtcTransport', async ({ sender },callback) => {
+    console.log(`sender request? ${sender}`);
+    if (sender) {
+      producerTransport = await createWebRtcTransport(callback)
+    } else {
+      consumerTransport = await createWebRtcTransport(callback)
+    }
   })
+
+  socket.on('transport-connect', async ({dtlsParameters }: any) => {
+    console.log(`dtls params ${dtlsParameters}`);
+    await producerTransport.connect({dtlsParameters}) 
+  })
+
+  socket.on('transport-produce', async ({kind, rtpParameters,appData }: any,callback) => {
+    producer = await producerTransport.produce({ kind, rtpParameters });
+
+    console.log('producer id: ',producer.id,producer.kind)
+    
+    producer.on('transportclose', () => {
+      console.log('transport for this producer is closed')
+      producer.close();
+    })
+
+    callback({
+      id:producer.id
+    })
+  })
+
+  socket.on('transport-recv-connect', async ({ dtlsParameters }: any, callback) => {
+    console.log(`dtls params ${dtlsParameters}`);
+    await consumerTransport.connect({dtlsParameters}) 
+    // callback({
+    //   id:producer.id
+    // })
+  })
+
+  socket.on('consume', async ({ rtpCapabilities },callback) => {
+    try {
+      if (router.canConsume({
+        producerId: producer.id,
+        rtpCapabilities
+      })) {
+        consumer = await consumerTransport.consume({
+          producerId: producer.id,
+          rtpCapabilities,
+          paused:true
+        })
+        consumer.on('transportclose', () => {
+          console.log('transport closed from consumer')
+          //consumer.close();
+        });
+        consumer.on('producerclose', () => {
+          console.log('producer of consumer closed')
+          //consumer.close();
+        })
+
+        const params = {
+          id: consumer.id,
+          producerId: producer.id,
+          kind: consumer.kind,
+          rtpParameters: consumer.rtpParameters,
+        }
+
+        callback({params})
+      }
+      
+    } catch (error) {
+      console.log('error consuming:', error);
+      callback({
+        params: {
+          error:error
+        }
+      })
+    }
+  })
+
+  socket.on('consumer-resume', async () => {
+    console.log('consumer resume')
+    await consumer.resume();
+  })
+
 })
 
 
@@ -196,151 +283,53 @@ httpsServer.listen(8080, () => {
 });
 
 
-//why worker is needed?
-// async function runMediasoupWorker() {
-//   try {
-//     console.log('Attempting to create Mediasoup worker');
-//     worker = await mediasoup.createWorker({
-//       logLevel: config.mediasoup.worker.logLevel as mediasoup.types.WorkerLogLevel,
-//       rtcMinPort: config.mediasoup.worker.rtcMinPort,
-//       rtcMaxPort: config.mediasoup.worker.rtcMaxPort,
-//     });
+const createWebRtcTransport = async (callback:any) => {
+  try {
 
-//     console.log('Mediasoup worker created successfully');
+    const webRtcTransport_options = {
+      listenIps: [
+        {
+          ip: '0.0.0.0',
+          announcedIp:'127.0.0.1'
+        }
+      ],
+      enableUdp: true,
+      enableTcp: true,
+      preferUdp:true
+    }
 
-//     worker.on('died', () => {
-//       console.error('Mediasoup worker died, exiting...');
-//       process.exit(1);
-//     });
+    let transport = await router.createWebRtcTransport(webRtcTransport_options);
+    console.log(`transport id: ${transport.id}`)
 
-//     mediasoupRouter = await worker.createRouter({
-//       mediaCodecs: config.mediasoup.router.mediaCodecs,
-//     });
-//   } catch (error) {
-//     console.error('Error creating Mediasoup worker:', error);
-//     throw error;
-//   }
-// }
+    transport.on('dtlsstatechange', (dtlsState:any) => {
+      if (dtlsState === 'closed') {
+        transport.close()
+      }
+    })
 
-// async function createWebRtcTransport() {
-//   const { maxIncomingBitrate, initialAvailableOutgoingBitrate } = config.mediasoup.webRtcTransport;
-//   const transport = await mediasoupRouter.createWebRtcTransport({
-//     listenIps: config.mediasoup.webRtcTransport.listenIps,
-//     enableUdp: true,
-//     enableTcp: true,
-//     preferUdp: true,
-//     initialAvailableOutgoingBitrate,
-//   });
+    transport.on('close', () => {
+      console.log('tranport closed')
+    })
 
-//   if (maxIncomingBitrate) {
-//     await transport.setMaxIncomingBitrate(maxIncomingBitrate);
-//   }
+    callback({
+      params: {
+        id: transport.id,
+        iceParameters: transport.iceParameters,
+        iceCandidates: transport.iceCandidates,
+        dtlsParameters: transport.dtlsParameters,
+        
+      }
+    })
 
-//   return {
-//     transport,
-//     params: {
-//       id: transport.id,
-//       iceParameters: transport.iceParameters,
-//       iceCandidates: transport.iceCandidates,
-//       dtlsParameters: transport.dtlsParameters,
-//     },
-//   };
-// }
+    return transport;
+    
+  } catch (error) {
+    console.log('error creating createWebRtcTransport:', error);
+    callback({
+      params: {
+        error:error
+      }
+    })
+  }
+}
 
-
-// io.on('connection', (socket) => {
-//   console.log('Video client connected');
-
-//   if (producer) {
-//     socket.emit('newProducer');
-//   }
-
-//   socket.on('disconnect', () => {
-//     console.log('Video client disconnected');
-//   });
-
-//   socket.on('getRouterRtpCapabilities', (data, callback) => {
-//     callback(mediasoupRouter.rtpCapabilities);
-//   });
-
-//   socket.on('createProducerTransport', async (_, callback) => {
-//     try {
-//       const { transport, params } = await createWebRtcTransport();
-//       producerTransport = transport;
-//       callback(params);
-//     } catch (err:any) {
-//       console.error(err);
-//       callback({ error: err.message });
-//     }
-//   });
-
-//   socket.on('createConsumerTransport', async (_, callback) => {
-//     try {
-//       const { transport, params } = await createWebRtcTransport();
-//       consumerTransport = transport;
-//       callback(params);
-//     } catch (err:any) {
-//       console.error(err);
-//       callback({ error: err.message });
-//     }
-//   });
-
-//   socket.on('connectProducerTransport', async (data, callback) => {
-//     await producerTransport.connect({ dtlsParameters: data.dtlsParameters });
-//     callback();
-//   });
-
-//   socket.on('connectConsumerTransport', async (data, callback) => {
-//     await consumerTransport.connect({ dtlsParameters: data.dtlsParameters });
-//     callback();
-//   });
-
-//   socket.on('produce', async (data, callback) => {
-//     const { kind, rtpParameters } = data;
-//     producer = await producerTransport.produce({ kind, rtpParameters });
-//     callback({ id: producer.id });
-
-//     socket.broadcast.emit('newProducer');
-//   });
-
-//   socket.on('consume', async (data, callback) => {
-//     try {
-//       if (!producer) {
-//         callback({ error: 'No active producer' });
-//         return;
-//       }
-//       if (!mediasoupRouter.canConsume({ producerId: producer.id, rtpCapabilities: data.rtpCapabilities })) {
-//         callback({ error: 'Cannot consume' });
-//         return;
-//       }
-//       consumer = await consumerTransport.consume({
-//         producerId: producer.id,
-//         rtpCapabilities: data.rtpCapabilities,
-//         paused: producer.kind === 'video',
-//       });
-
-//       callback({
-//         producerId: producer.id,
-//         id: consumer.id,
-//         kind: consumer.kind,
-//         rtpParameters: consumer.rtpParameters,
-//         type: consumer.type,
-//       });
-      
-//     } catch (error:any) {
-//       console.error('Consume error:', error);
-//       callback({ error: error.message });
-//     }
-//   });
-
-//   socket.on('resume', async (_, callback) => {
-//     await consumer.resume();
-//     callback();
-//   });
-// });
-
-
-// // Start the application
-// (async () => {
-//   await runMediasoupWorker();
-// })();
