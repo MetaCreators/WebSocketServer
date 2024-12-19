@@ -49,7 +49,47 @@ const io = new Server(httpsServer, {
 });
 //const peers = io.of('/mediasoup')
 
-io.on('connection', (socket) => {
+
+let worker:any;
+let router:any;
+
+
+async function createWorker() {
+  worker = await mediasoup.createWorker({
+    rtcMinPort: 2000,
+    rtcMaxPort:2020
+  })
+  console.log(`worker pid: ${worker.pid}`);
+
+  worker.on('died', (err: any) => {
+    console.log('mediasoup worker died')
+    setTimeout(()=>process.exit(1),2000)
+  })
+
+  return worker;
+}
+
+worker = createWorker();
+
+const mediaCodecs = [
+  {
+    kind: 'audio',
+    mimeType: 'audio/opus',
+    clockRate: 48000,
+    channels:2
+  },
+  {
+    kind: 'video',
+    mimeType: 'video/VP8',
+    clockRate: 90000,
+    parameters: {
+      'x-google-start-bitrate':1000,
+    }
+  }
+]
+
+
+io.on('connection', async (socket) => {
   console.log("user connected with id " + socket.id);
   socket.broadcast.emit("new-user","new user joined with id "+socket.id)
   socket.on('connect_error', (error) => {
@@ -63,11 +103,21 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
       console.log('A user disconnected with userid '+socket.id);
   });
+
+  router = await worker.createRouter({ mediaCodecs });
+
+  socket.on('getRtpCapabilities', (callback) => {
+    const rtpCapabilities = router.rtpCapabilities;
+    console.log('rtpCapabilities: ', rtpCapabilities);
+    callback({ rtpCapabilities });
+  })
 })
+
+
 
 let connectedUsers: Map<number, User> = new Map();
 
-io.listen(4000);
+//io.listen(4000);
 
 wss.on('connection', function connection(ws) {
 
