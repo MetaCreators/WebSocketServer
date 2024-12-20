@@ -12,21 +12,12 @@ import { Server } from 'socket.io';
 import * as mediasoup from 'mediasoup';
 import cors from 'cors';
 import fs from 'fs'
+import path from 'path';
 
-
-// Mediasoup-related variables
-// let worker: any;
-// let producer: any;
-// let consumer: any;
-// let producerTransport: any;
-// let consumerTransport: any;
-// let mediasoupRouter: any;
-
-// const options = {
-//   key:fs.readFileSync('./src/ssl/key.pem','utf-8'),
-//   cert:fs.readFileSync('./src/ssl/cert.pem','utf-8')
-// }
-
+const options = {
+  key: fs.readFileSync(path.join(__dirname, 'ssl/localhost-key.pem'), 'utf-8'),
+  cert: fs.readFileSync(path.join(__dirname, 'ssl/localhost.pem'), 'utf-8'),
+};
 
 const app = express();
 app.use(cors());
@@ -34,8 +25,8 @@ app.use(cors());
 app.get('/', (req,res) => {
   res.send('hello from lithouse Backend')
 })
-//const httpsServer = https.createServer(options, app);
-const httpsServer = createServer(app);
+const httpsServer = https.createServer(options, app);
+//const httpsServer = createServer(app);
 
 const wss = new WebSocketServer({ server: httpsServer, path: '/chat' });
 const io = new Server(httpsServer, {
@@ -124,9 +115,8 @@ io.on('connection', async (socket) => {
       consumerTransport = await createWebRtcTransport(callback)
     }
   })
-
   socket.on('transport-connect', async ({dtlsParameters }: any) => {
-    console.log(`dtls params ${dtlsParameters}`);
+    console.log(`dtls params for producer ${dtlsParameters}`);
     await producerTransport.connect({dtlsParameters}) 
   })
 
@@ -145,12 +135,19 @@ io.on('connection', async (socket) => {
     })
   })
 
+  //some error here because dtls params for consumer is not getting logged,this event is not being triggered at all
   socket.on('transport-recv-connect', async ({ dtlsParameters }: any, callback) => {
-    console.log(`dtls params ${dtlsParameters}`);
-    await consumerTransport.connect({dtlsParameters}) 
+    console.log("transport-recv-connect called")
+    try {
+      console.log(`dtls params for consumer ${dtlsParameters}`);
+      await consumerTransport.connect({dtlsParameters}) 
     // callback({
     //   id:producer.id
     // })
+    } catch (error: any) {
+      console.log('error in transport-recv-connect: ',error)
+    }
+   
   })
 
   socket.on('consume', async ({ rtpCapabilities },callback) => {
