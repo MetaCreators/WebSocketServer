@@ -133,7 +133,7 @@ io.on('connection', async (socket) => {
   socket.on('transport-produce', async ({kind, rtpParameters,appData }: any,callback) => {
     producer = await producerTransport.produce({ kind, rtpParameters });
 
-    console.log('producer id: ',producer.id,producer.kind)
+    console.log('Producer created:', producer.id, producer.kind);
     
     producer.on('transportclose', () => {
       console.log('transport for this producer is closed')
