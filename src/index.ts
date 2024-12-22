@@ -26,6 +26,11 @@ app.get('/', (req,res) => {
   res.send('hello from lithouse Backend')
 })
 const httpsServer = https.createServer(options, app);
+httpsServer.listen(8080, () => {
+  console.log('Server is running on https://localhost:8080');
+});
+
+
 //const httpsServer = createServer(app);
 
 const wss = new WebSocketServer({ server: httpsServer, path: '/chat' });
@@ -61,8 +66,20 @@ async function createWorker() {
     setTimeout(()=>process.exit(1),2000)
   })
 
+  //router = await worker.createRouter({ mediaCodecs });
+
   return worker;
 }
+
+// async function initializeMediasoup() {
+//   try {
+//     await createWorker();
+//     console.log('Mediasoup worker and router initialized successfully');
+//   } catch (error) {
+//     console.error('Failed to initialize mediasoup:', error);
+//     process.exit(1);
+//   }
+// }
 
 worker = createWorker();
 
@@ -92,20 +109,34 @@ io.on('connection', async (socket) => {
   });
 
   socket.emit('connection-success', {
-    socketId:socket.id
+    socketId: socket.id,
+    existsProducer:producer ? true: false 
   })
   socket.emit("hello","welcome to server")
   socket.on('disconnect', () => {
       console.log('A user disconnected with userid '+socket.id);
   });
 
-  router = await worker.createRouter({ mediaCodecs });
+  socket.on('createRoom', async (callback)=> {
+    if (router === undefined) {
+      router = await worker.createRouter({ mediaCodecs });
+      console.log('router id: ',router.id)
+    }
+    getRtpCapabilities(callback)
+  })
 
-  socket.on('getRtpCapabilities', (callback) => {
+  const getRtpCapabilities= (callback:any) => {
     const rtpCapabilities = router.rtpCapabilities;
-    console.log('rtpCapabilities: ', rtpCapabilities);
-    callback({ rtpCapabilities });
-  });
+    callback({rtpCapabilities})
+  }
+
+//  router = await worker.createRouter({ mediaCodecs });
+
+  // socket.on('getRtpCapabilities', (callback) => {
+  //   const rtpCapabilities = router.rtpCapabilities;
+  //   console.log('rtpCapabilities: ', rtpCapabilities);
+  //   callback({ rtpCapabilities });
+  // });
 
   socket.on('createWebRtcTransport', async ({ sender },callback) => {
     console.log(`sender request? ${sender}`);
@@ -273,10 +304,6 @@ wss.on('connection', function connection(ws) {
     connectedUsers.delete(userId);
     broadcastUserList(connectedUsers,wss);
   });
-});
-
-httpsServer.listen(8080, () => {
-  console.log('Server is running on http://localhost:8080');
 });
 
 
