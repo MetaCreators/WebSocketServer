@@ -1,5 +1,6 @@
 import  WebSocket,{ WebSocketServer } from "ws";
 import { User } from "../../types/Usertypes";
+import { chats } from "../../store/ChatMessages";
 
 
 export function broadcastUserList(connectedUsers:Map<number, User>,wss:WebSocketServer) {
@@ -29,8 +30,8 @@ export function broadcastUserMove(userId: number, position: { x: number, y: numb
     }
   });
 }
-//
-export function broadcastChatMessage(userId: number, message: string,wss:WebSocketServer) {
+export function broadcastChatMessage(userId: number, message: string, wss: WebSocketServer) {
+  chats.push({userId:userId,message:message})
   wss.clients.forEach(client => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(JSON.stringify({
